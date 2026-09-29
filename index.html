@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Virtual Artifact Hunt</title>
+<meta name="description" content="Explore five illustrated galleries of a digital museum and hunt for 20 real artifacts from native communities around the world.">
+<link rel="stylesheet" href="css/style.css?v=4">
+</head>
+<body>
+
+<div class="app">
+
+  <header class="masthead">
+    <div>
+      <span class="kicker">Digital Museum &middot; Interactive Exhibit</span>
+      <h1>Virtual <span>Artifact</span> Hunt</h1>
+    </div>
+    <div class="masthead-actions">
+      <button class="btn btn-ghost icon-btn" id="sound-btn" type="button" aria-pressed="false" title="Toggle sound">&#128266;</button>
+      <button class="btn btn-ghost" id="howto-btn" type="button">How to Play</button>
+    </div>
+  </header>
+
+  <!-- ============================ INTRO ============================ -->
+  <section class="screen active" id="screen-intro">
+    <p class="intro-lede">
+      Step into the gallery. Pick a region below, explore its illustrated scene, and click on
+      every artifact you can find before the clock runs out. Each one opens a card with its
+      story &mdash; and some hide a bonus trivia question worth extra points.
+    </p>
+
+    <div class="region-grid" id="region-grid"></div>
+
+    <div class="notebook-preview" id="notebook-preview">
+      <h2>Field Notebook</h2>
+      <p class="notebook-sub">Your progress across all five regions.</p>
+      <div class="notebook-grid" id="notebook-grid"></div>
+    </div>
+
+    <p class="footnote">
+      Gallery scenes are original illustrations drawn in code. Artifact photos shown on each
+      card are placeholder images and are pending a licensing review before public release.
+    </p>
+  </section>
+
+  <!-- ============================ PLAY ============================= -->
+  <section class="screen" id="screen-play">
+
+    <div class="hud">
+      <div>
+        <div class="route-name" id="hud-region">&mdash;</div>
+        <div class="route-era" id="hud-sub">&mdash;</div>
+      </div>
+      <div class="spacer"></div>
+
+      <div class="stat"><div class="val" id="hud-progress">0/0</div><div class="lbl">Found</div></div>
+      <div class="stat streak" id="streak-stat" hidden><div class="val" id="hud-streak">&times;1</div><div class="lbl">Streak</div></div>
+      <div class="stat score"><div class="val" id="hud-score">0</div><div class="lbl">Score</div></div>
+      <div class="stat timer" id="timer-stat"><div class="val" id="hud-time">0:00</div><div class="lbl">Time left</div></div>
+
+      <button class="btn btn-ghost" id="hint-btn" type="button">Hint (3)</button>
+      <button class="btn btn-ghost" id="notebook-btn" type="button">Field notebook</button>
+      <button class="btn btn-ghost" id="quit-btn" type="button">Leave gallery</button>
+
+      <div class="timebar" id="timebar"><i></i></div>
+    </div>
+
+    <div class="scene-wrap">
+      <button class="scroll-btn scroll-btn-left" id="scroll-left-btn" type="button" aria-label="Look left">&#8592;</button>
+      <div class="scene-scroll" id="scene-scroll">
+        <svg id="scene" role="application" aria-label="Illustrated gallery scene. Scroll to explore, and click camouflaged artifacts to examine them."></svg>
+      </div>
+      <button class="scroll-btn scroll-btn-right" id="scroll-right-btn" type="button" aria-label="Look right">&#8594;</button>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+      <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
+      <div class="scroll-hint" id="scroll-hint">&#8592;&nbsp; Scroll or drag to explore the gallery &nbsp;&#8594;</div>
+    </div>
+  </section>
+
+  <!-- =========================== RESULTS =========================== -->
+  <section class="screen" id="screen-results">
+    <div class="modal" style="margin:0 auto">
+      <div class="results-head">
+        <div class="grade" id="res-grade">&mdash;</div>
+        <div class="sub" id="res-sub">&mdash;</div>
+      </div>
+
+      <div class="score-grid">
+        <div class="score-cell"><div class="v" id="res-score">0</div><div class="k">Score</div></div>
+        <div class="score-cell"><div class="v" id="res-found">0/0</div><div class="k">Artifacts found</div></div>
+        <div class="score-cell"><div class="v" id="res-quiz">0/0</div><div class="k">Trivia correct</div></div>
+        <div class="score-cell"><div class="v" id="res-time">0:00</div><div class="k">Time left</div></div>
+      </div>
+
+      <div class="result-actions">
+        <button class="btn btn-primary" id="replay-btn" type="button">Explore again</button>
+        <button class="btn" id="menu-btn" type="button">Choose another region</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ======================= ARTIFACT CARD MODAL ===================== -->
+<div class="overlay" id="card-overlay" role="dialog" aria-modal="true" aria-labelledby="card-title">
+  <div class="modal card-modal">
+    <div class="card-art" id="card-art"></div>
+    <div class="card-body">
+      <div class="eyebrow" id="card-culture"></div>
+      <h2 id="card-title"></h2>
+      <p class="card-desc" id="card-desc"></p>
+      <p class="card-use" id="card-use"></p>
+      <div class="card-note" id="card-note" hidden></div>
+
+      <div class="quiz-block" id="quiz-block" hidden>
+        <div class="q" id="quiz-q"></div>
+        <div class="opts" id="quiz-opts"></div>
+        <div class="quiz-note" id="quiz-note"></div>
+      </div>
+
+      <div class="modal-foot">
+        <span class="note" id="card-points"></span>
+        <button class="btn btn-primary" id="card-next" type="button">Back to gallery</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ NOTEBOOK =========================== -->
+<div class="overlay" id="notebook-overlay" role="dialog" aria-modal="true" aria-labelledby="notebook-title">
+  <div class="modal notebook-modal">
+    <h2 id="notebook-title">Field Notebook</h2>
+    <p class="notebook-sub">Every artifact you've identified so far, region by region.</p>
+    <div class="notebook-grid" id="notebook-grid-modal"></div>
+    <div class="modal-foot">
+      <span></span>
+      <button class="btn btn-primary" id="notebook-close" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ TUTORIAL ============================ -->
+<div class="overlay" id="tutorial-overlay" role="dialog" aria-modal="true" aria-labelledby="tutorial-title">
+  <div class="modal tutorial-modal">
+    <div class="tutorial-art" id="tutorial-art"></div>
+    <div class="tutorial-body">
+      <div class="tutorial-dots" id="tutorial-dots"></div>
+      <h2 id="tutorial-title"></h2>
+      <p id="tutorial-text"></p>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" id="tutorial-skip" type="button">Skip</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" id="tutorial-back" type="button">Back</button>
+          <button class="btn btn-primary" id="tutorial-next" type="button">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/artifacts.js?v=3"></script>
+<script src="js/sound.js?v=2"></script>
+<script src="js/icons.js?v=2"></script>
+<script src="js/scenes.js?v=2"></script>
+<script src="js/game.js?v=7"></script>
+</body>
+</html>
