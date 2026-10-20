@@ -1,136 +1,128 @@
 /* ==================================================================
-   Virtual Artifact Hunt — game engine
+   Virtual Artifact Hunt — game flow
+   search (3D world) → find → restore (puzzle) → learn (card)
+   → end of gallery: curator's quiz on what you found → results
+   The timer only runs while you're searching; puzzles, cards and the
+   quiz pause it.
    ================================================================== */
 
 (() => {
   const LS_FOUND = 'vah_found_v1';
   const LS_BEST = 'vah_best_v1';
-  const LS_SEEN_TUTORIAL = 'vah_seen_tutorial_v1';
-  const LS_SEEN_SCROLL_HINT = 'vah_seen_scroll_hint_v1';
-  const STREAK_WINDOW_MS = 11000;
+  const LS_SEEN_TUTORIAL = 'vah_seen_tutorial_v3';
+  const STREAK_WINDOW_MS = 25000;
   const HINTS_PER_REGION = 3;
-  const GLINT_EVERY_MS = 7000;
-  const GLINT_STAGGER_MS = 1500;
-  const GLINT_DURATION_MS = 550;
+  const RESTORE_BONUS = 40;
+  const QUIZ_POINTS = 50, PEEK_COST = 10;
 
   const state = {
     everFound: new Set(loadFound()),
     best: loadBest(),
-    // per-round state
     region: null,
     artifacts: [],
-    foundThisRound: new Set(),
-    quizResult: {},   // id -> true/false
+    found: [],          // artifact ids in the order found this round
+    restored: new Set(),
     score: 0,
     timeLeft: 0,
-    timer: null,
     duration: 0,
+    timer: null,
+    paused: false,
     ended: false,
-    transformOpen: false,
     streak: 0,
     lastFoundAt: 0,
     hintsLeft: HINTS_PER_REGION,
-    glintNextAt: {},  // artifact id -> timestamp
-    glintTimer: null,
+    puzzleOffset: 0,
+    quiz: { list: [], i: 0, correct: 0, peeked: false },
   };
+
+  let worldReady = false;
 
   function loadFound() {
-    try { return JSON.parse(localStorage.getItem(LS_FOUND)) || []; }
-    catch { return []; }
+    try { return JSON.parse(localStorage.getItem(LS_FOUND)) || []; } catch { return []; }
   }
   function saveFound() {
-    try { localStorage.setItem(LS_FOUND, JSON.stringify([...state.everFound])); }
-    catch {}
+    try { localStorage.setItem(LS_FOUND, JSON.stringify([...state.everFound])); } catch {}
   }
   function loadBest() {
-    try { return JSON.parse(localStorage.getItem(LS_BEST)) || {}; }
-    catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(LS_BEST)) || {}; } catch { return {}; }
   }
   function saveBest() {
-    try { localStorage.setItem(LS_BEST, JSON.stringify(state.best)); }
-    catch {}
+    try { localStorage.setItem(LS_BEST, JSON.stringify(state.best)); } catch {}
   }
 
-  function iconParts(key, arg) {
-    const svgStr = ICONS[key](arg);
-    const vb = (svgStr.match(/viewBox="([^"]+)"/) || [,'0 0 200 220'])[1];
-    const inner = svgStr.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
-    return { vb, inner };
-  }
+  const el = (id) => document.getElementById(id);
+  const byId = (id) => ARTIFACTS.find(a => a.id === id);
+  const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
 
   function iconStandalone(key, arg) {
-    const { vb, inner } = iconParts(key, arg);
+    const svgStr = ICONS[key](arg);
+    const vb = (svgStr.match(/viewBox="([^"]+)"/) || [, '0 0 200 220'])[1];
+    const inner = svgStr.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
     return `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">${inner}</svg>`;
   }
+  const svgUrl = (key) => 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(ICONS[key]());
+  const imageFor = (a) => a.photo || svgUrl(a.icon);
 
-  // ---------------------------------------------------------- elements
-  const el = (id) => document.getElementById(id);
-  const screens = {
-    intro: el('screen-intro'),
-    play: el('screen-play'),
-    results: el('screen-results'),
-  };
-
+  const screens = { intro: el('screen-intro'), play: el('screen-play'), results: el('screen-results') };
   function showScreen(name) {
     Object.values(screens).forEach(s => s.classList.remove('active'));
     screens[name].classList.add('active');
+    document.body.classList.toggle('playing', name === 'play');
   }
+
+  // ------------------------------------------------ on-screen 3D controls
+  function onInspect(active, label) {
+    el('view-back').hidden = !active;
+    el('view-label').textContent = active && label ? `· ${label} · drag to peek around` : '';
+  }
+  el('view-back').addEventListener('click', () => { SOUND.click(); WORLD.exitInspect(); });
+
+  // Hold an arrow to keep turning (in a close-up it peeks around the object).
+  function holdButton(btn, step) {
+    let raf = 0;
+    const tick = () => { WORLD.nudge(step); raf = requestAnimationFrame(tick); };
+    const stop = () => { cancelAnimationFrame(raf); raf = 0; };
+    btn.addEventListener('pointerdown', (e) => { e.preventDefault(); btn.setPointerCapture(e.pointerId); stop(); tick(); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => btn.addEventListener(ev, stop));
+    btn.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); WORLD.nudge(step * 6); } });
+  }
+  holdButton(el('vc-left'), 0.03);
+  holdButton(el('vc-right'), -0.03);
+  el('vc-zoom-in').addEventListener('click', () => WORLD.zoom(-6));
+  el('vc-zoom-out').addEventListener('click', () => WORLD.zoom(6));
 
   function toast(msg) {
     const t = el('toast');
     t.textContent = msg;
     t.classList.add('show');
     clearTimeout(toast._h);
-    toast._h = setTimeout(() => t.classList.remove('show'), 1700);
+    toast._h = setTimeout(() => t.classList.remove('show'), 2000);
   }
 
   // ---------------------------------------------------------- confetti
-
   const CONFETTI_COLORS = ['#f2a63d', '#d9603b', '#1f8a83', '#c1416a', '#5a8f3c'];
-
-  function spawnConfetti(x, y, count, big) {
+  function burstConfettiAt(xFrac, yFrac, count = 16, big = false) {
     const layer = el('confetti-layer');
-    if (!layer) return;
+    const rect = layer.getBoundingClientRect();
     for (let i = 0; i < count; i++) {
       const piece = document.createElement('span');
       piece.className = 'confetti-piece';
       const angle = (Math.PI * 2 * i) / count + Math.random() * 0.5;
       const dist = (big ? 140 : 70) + Math.random() * (big ? 100 : 40);
-      const dx = Math.cos(angle) * dist;
-      const dy = Math.sin(angle) * dist - (big ? 40 : 20);
       const size = big ? 8 + Math.random() * 8 : 5 + Math.random() * 5;
-      piece.style.left = `${x}px`;
-      piece.style.top = `${y}px`;
-      piece.style.width = `${size}px`;
-      piece.style.height = `${size}px`;
+      piece.style.left = `${xFrac * rect.width}px`;
+      piece.style.top = `${yFrac * rect.height}px`;
+      piece.style.width = piece.style.height = `${size}px`;
       piece.style.background = CONFETTI_COLORS[i % CONFETTI_COLORS.length];
-      piece.style.setProperty('--dx', `${dx}px`);
-      piece.style.setProperty('--dy', `${dy}px`);
+      piece.style.setProperty('--dx', `${Math.cos(angle) * dist}px`);
+      piece.style.setProperty('--dy', `${Math.sin(angle) * dist - (big ? 40 : 20)}px`);
       piece.style.animationDuration = `${0.7 + Math.random() * 0.5}s`;
       layer.appendChild(piece);
       piece.addEventListener('animationend', () => piece.remove());
     }
   }
 
-  // Decorative bursts positioned as a fraction of the visible window.
-  function burstConfettiAt(xFrac, yFrac, count = 16, big = false) {
-    const layer = el('confetti-layer');
-    if (!layer) return;
-    const rect = layer.getBoundingClientRect();
-    spawnConfetti(xFrac * rect.width, yFrac * rect.height, count, big);
-  }
-
-  // Per-artifact bursts, positioned from scene (viewBox) coordinates —
-  // accounts for the current horizontal scroll offset and scale.
-  function burstConfettiAtScene(sceneX, sceneY, count = 14) {
-    const wrap = el('scene-scroll');
-    if (!wrap) return;
-    const scale = wrap.clientHeight / 900;
-    spawnConfetti(sceneX * scale - wrap.scrollLeft, sceneY * scale, count, false);
-  }
-
-  // ---------------------------------------------------------- intro screen
-
+  // ------------------------------------------------------------- intro
   function regionThumb(key) {
     const scene = SCENES[key];
     return `<svg viewBox="0 0 ${scene.width} 900" preserveAspectRatio="xMidYMid slice">${scene.back}${scene.front}</svg>`;
@@ -151,7 +143,7 @@
           <span class="thumb">${regionThumb(r.key)}</span>
           <span class="body">
             <h3>${r.name}</h3>
-            <span class="region-meta">${r.subtitle}</span>
+            <span class="region-meta">${r.subtitle} &middot; ${artifacts.length} artifacts</span>
             <span class="progress-row">
               <span class="progress-bar"><i style="width:${pct}%"></i></span>
               <span>${foundCount}/${artifacts.length}</span>
@@ -182,123 +174,49 @@
     }).join('');
   }
 
-  // ------------------------------------------------------------ playing
-
+  // -------------------------------------------------------------- play
   function startRegion(key) {
     const region = REGIONS.find(r => r.key === key);
     const artifacts = ARTIFACTS_BY_REGION[key];
-
-    state.region = region;
-    state.artifacts = artifacts;
-    state.foundThisRound = new Set();
-    state.quizResult = {};
-    state.score = 0;
-    state.ended = false;
-    state.streak = 0;
-    state.lastFoundAt = 0;
-    state.hintsLeft = HINTS_PER_REGION;
-    state.duration = artifacts.length * 45 + 30;
+    Object.assign(state, {
+      region, artifacts, found: [], restored: new Set(), score: 0, ended: false, paused: false,
+      streak: 0, lastFoundAt: 0, hintsLeft: HINTS_PER_REGION,
+      puzzleOffset: Math.floor(Math.random() * PUZZLES.TYPES.length),
+      duration: artifacts.length * 45 + 30,
+      quiz: { list: [], i: 0, correct: 0, peeked: false },
+    });
     state.timeLeft = state.duration;
 
     el('hud-region').textContent = region.name;
     el('hud-sub').textContent = region.subtitle;
     el('streak-stat').hidden = true;
-    document.querySelector('.scene-wrap').classList.remove('low');
-    updateHintBtn();
-    updateHud();
-
     showScreen('play');
-    el('scene-scroll').scrollLeft = 0;
-    renderScene();
-    startTimer();
-    startGlintLoop();
-    toast(`Find all ${artifacts.length} artifacts in the ${region.name} gallery!`);
 
-    let seenScrollHint = false;
-    try { seenScrollHint = localStorage.getItem(LS_SEEN_SCROLL_HINT) === '1'; } catch {}
-    const hintEl = el('scroll-hint');
-    if (!seenScrollHint) {
-      hintEl.classList.add('show');
-      const dismiss = () => {
-        hintEl.classList.remove('show');
-        try { localStorage.setItem(LS_SEEN_SCROLL_HINT, '1'); } catch {}
-      };
-      el('scene-scroll').addEventListener('scroll', dismiss, { once: true });
-      setTimeout(dismiss, 5000);
-    } else {
-      hintEl.classList.remove('show');
+    if (!WORLD.supported()) {
+      el('world-fallback').hidden = false;
+      return;
     }
-  }
+    if (!worldReady) {
+      WORLD.init(el('world'), { onPick, onToast: toast, onInspect });
+      worldReady = true;
+    }
+    WORLD.loadRegion(key, artifacts);
+    WORLD.setActive(true);
+    const help = el('world-help');
+    help.classList.remove('hide');
+    el('world').addEventListener('pointerdown', () => setTimeout(() => help.classList.add('hide'), 2500), { once: true });
 
-  function sceneScale() {
-    const wrap = el('scene-scroll');
-    return wrap.clientHeight / 900 || 1;
-  }
-
-  function sizeScene() {
-    const wrap = el('scene-scroll');
-    const svg = el('scene');
-    if (!state.region) return;
-    const h = wrap.clientHeight;
-    const scale = h / 900;
-    svg.setAttribute('width', Math.round(SCENES[state.region.key].width * scale));
-    svg.setAttribute('height', Math.round(h));
-    updateScrollBtns();
-  }
-
-  function updateScrollBtns() {
-    const wrap = el('scene-scroll');
-    const max = wrap.scrollWidth - wrap.clientWidth;
-    el('scroll-left-btn').classList.toggle('hidden', wrap.scrollLeft <= 2);
-    el('scroll-right-btn').classList.toggle('hidden', wrap.scrollLeft >= max - 2);
-  }
-
-  function renderScene() {
-    const scene = SCENES[state.region.key];
-    const svg = el('scene');
-    svg.setAttribute('viewBox', `0 0 ${scene.width} 900`);
-
-    const hotspotMarkup = scene.hotspots.map((h, i) => {
-      const artifact = state.artifacts.find(a => a.id === h.id);
-      if (!artifact) return '';
-      const found = state.foundThisRound.has(artifact.id);
-      const { vb, inner } = iconParts(artifact.icon);
-      const w = h.r * 1.3, hgt = h.r * 1.42;
-      const label = found ? `${artifact.name}, found` : `Hidden artifact ${i + 1} of ${scene.hotspots.length}`;
-      return `
-        <g class="hotspot ${found ? 'found' : ''}" data-id="${artifact.id}" tabindex="0" role="button"
-           aria-label="${label}">
-          <ellipse class="shadow" cx="${h.x}" cy="${h.y + h.r * 0.58}" rx="${h.r * 0.52}" ry="${h.r * 0.15}"></ellipse>
-          <svg class="art" x="${h.x - w / 2}" y="${h.y - hgt * 0.62}" width="${w}" height="${hgt}" viewBox="${vb}">${inner}</svg>
-        </g>`;
-    }).join('');
-
-    svg.innerHTML = `<g>${scene.back}</g><g class="hotspot-layer">${hotspotMarkup}</g><g>${scene.front}</g>`;
-    sizeScene();
-
-    [...svg.querySelectorAll('.hotspot')].forEach(g => {
-      g.addEventListener('click', () => onHotspotClick(g.dataset.id));
-      g.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onHotspotClick(g.dataset.id); }
-      });
-    });
-  }
-
-  let justDragged = false;
-
-  function onHotspotClick(id) {
-    if (justDragged) return;
-    const artifact = state.artifacts.find(a => a.id === id);
-    if (!artifact) return;
-    SOUND.open();
-    openCard(artifact);
+    updateHintBtn();
+    renderChecklist();
+    updateHud();
+    startTimer();
+    toast(`${artifacts.length} artifacts are hidden in this gallery. Start searching!`);
   }
 
   function updateHud() {
-    el('hud-progress').textContent = `${state.foundThisRound.size}/${state.artifacts.length}`;
+    el('hud-progress').textContent = `${state.found.length}/${state.artifacts.length}`;
     el('hud-score').textContent = state.score;
-    const m = Math.floor(state.timeLeft / 60);
-    const s = String(state.timeLeft % 60).padStart(2, '0');
+    const m = Math.floor(state.timeLeft / 60), s = String(state.timeLeft % 60).padStart(2, '0');
     el('hud-time').textContent = `${m}:${s}`;
     const low = state.timeLeft <= 20;
     el('timer-stat').classList.toggle('low', low);
@@ -313,390 +231,353 @@
     btn.disabled = state.hintsLeft <= 0;
   }
 
+  function renderChecklist() {
+    const box = el('checklist');
+    const hidden = state.artifacts.length - state.found.length;
+    box.innerHTML = `<span class="checklist-label">${hidden ? `${hidden} still hidden` : 'All found!'}</span>` +
+      state.artifacts.map(a => {
+        if (!state.found.includes(a.id)) return `<span class="chk chk-unknown" title="Not found yet">?</span>`;
+        return `<button type="button" class="chk chk-found" data-id="${a.id}" title="${a.name} — tap to reread">
+          <img src="${imageFor(a)}" alt="${a.name}"></button>`;
+      }).join('');
+    box.querySelectorAll('.chk-found').forEach(b => b.addEventListener('click', () => {
+      state.paused = true;
+      openCard(byId(b.dataset.id), null);
+    }));
+  }
+
   function startTimer() {
     clearInterval(state.timer);
-    updateHud();
     state.timer = setInterval(() => {
+      if (state.paused || state.ended) return;
       state.timeLeft--;
       updateHud();
       if (state.timeLeft <= 10 && state.timeLeft > 0) SOUND.tick();
-      if (state.timeLeft <= 0) {
-        clearInterval(state.timer);
-        SOUND.timeout();
-        endRound(false);
-      }
+      if (state.timeLeft <= 0) { SOUND.timeout(); finishRound(false); }
     }, 1000);
   }
 
-  // ------------------------------------------------------------ glint cue
+  function onPick(id) {
+    if (state.ended || state.paused || state.found.includes(id)) return;
+    const artifact = byId(id);
+    state.paused = true;
+    state.found.push(id);
+    state.everFound.add(id);
+    saveFound();
 
-  function startGlintLoop() {
-    clearInterval(state.glintTimer);
-    state.glintNextAt = {};
     const now = Date.now();
-    state.artifacts.forEach((a, i) => {
-      state.glintNextAt[a.id] = now + 2500 + i * GLINT_STAGGER_MS;
-    });
-    state.glintTimer = setInterval(tickGlint, 500);
+    state.streak = state.lastFoundAt && now - state.lastFoundAt <= STREAK_WINDOW_MS ? state.streak + 1 : 1;
+    state.lastFoundAt = now;
+    const streakBonus = Math.min((state.streak - 1) * 20, 100);
+    state.score += artifact.points + streakBonus;
+    if (state.streak >= 2) { el('streak-stat').hidden = false; el('hud-streak').textContent = `×${state.streak}`; }
+
+    const pos = WORLD.screenPos(id);
+    burstConfettiAt(pos.x, pos.y, 16);
+    WORLD.markFound(id);
+    SOUND.found();
+    updateHud();
+    renderChecklist();
+    toast(streakBonus ? `You found something! Streak ×${state.streak} (+${streakBonus})` : 'You found something!');
+
+    const type = PUZZLES.TYPES[(state.found.length - 1 + state.puzzleOffset) % PUZZLES.TYPES.length];
+    setTimeout(() => PUZZLES.open({
+      src: imageFor(artifact),
+      name: artifact.culture,
+      type,
+      onDone(solved) {
+        if (solved) { state.restored.add(id); state.score += RESTORE_BONUS; updateHud(); }
+        openCard(artifact, { solved, streakBonus });
+      },
+    }), 650);
   }
 
-  function stopGlintLoop() {
-    clearInterval(state.glintTimer);
-  }
-
-  function visibleSceneRange() {
-    const wrap = el('scene-scroll');
-    const scale = sceneScale();
-    return { min: wrap.scrollLeft / scale, max: (wrap.scrollLeft + wrap.clientWidth) / scale };
-  }
-
-  function tickGlint() {
-    if (state.ended) return;
-    const now = Date.now();
-    const scene = SCENES[state.region.key];
-    const range = visibleSceneRange();
-    scene.hotspots.forEach(h => {
-      if (state.foundThisRound.has(h.id)) return;
-      if (now < (state.glintNextAt[h.id] || 0)) return;
-      if (h.x < range.min - h.r || h.x > range.max + h.r) {
-        state.glintNextAt[h.id] = now + 1200; // check again soon in case they scroll here
-        return;
-      }
-      glintHotspot(h.id, GLINT_DURATION_MS, false);
-      state.glintNextAt[h.id] = now + GLINT_EVERY_MS;
-    });
-  }
-
-  function glintHotspot(id, duration, strong) {
-    const g = el('scene').querySelector(`.hotspot[data-id="${id}"]`);
-    if (!g) return;
-    g.classList.add(strong ? 'hint-glow' : 'glint');
-    setTimeout(() => g.classList.remove(strong ? 'hint-glow' : 'glint'), duration);
-  }
-
-  // -------------------------------------------------------------- hints
-
-  el('hint-btn').addEventListener('click', () => {
-    if (state.hintsLeft <= 0) return;
-    const scene = SCENES[state.region.key];
-    const target = scene.hotspots.find(h => !state.foundThisRound.has(h.id));
-    if (!target) return;
-    state.hintsLeft--;
-    updateHintBtn();
-    SOUND.click();
-
-    const wrap = el('scene-scroll');
-    const scale = sceneScale();
-    const targetLeft = Math.max(0, target.x * scale - wrap.clientWidth / 2);
-    wrap.scrollTo({ left: targetLeft, behavior: 'smooth' });
-    setTimeout(() => glintHotspot(target.id, 1800, true), 350);
-  });
-
-  // ---------------------------------------------------------- scroll ergonomics
-
-  (() => {
-    const wrap = el('scene-scroll');
-    let dragging = false, startX = 0, startScroll = 0, moved = 0;
-
-    wrap.addEventListener('wheel', (e) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
-      e.preventDefault();
-      wrap.scrollLeft += e.deltaY;
-    }, { passive: false });
-
-    wrap.addEventListener('mousedown', (e) => {
-      dragging = true; moved = 0;
-      startX = e.clientX;
-      startScroll = wrap.scrollLeft;
-      wrap.classList.add('dragging');
-    });
-    window.addEventListener('mousemove', (e) => {
-      if (!dragging) return;
-      const dx = e.clientX - startX;
-      moved = Math.max(moved, Math.abs(dx));
-      wrap.scrollLeft = startScroll - dx;
-    });
-    window.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      wrap.classList.remove('dragging');
-      if (moved > 6) {
-        justDragged = true;
-        setTimeout(() => { justDragged = false; }, 50);
-      }
-    });
-
-    el('scroll-left-btn').addEventListener('click', () => {
-      wrap.scrollBy({ left: -0.8 * wrap.clientWidth, behavior: 'smooth' });
-    });
-    el('scroll-right-btn').addEventListener('click', () => {
-      wrap.scrollBy({ left: 0.8 * wrap.clientWidth, behavior: 'smooth' });
-    });
-
-    wrap.addEventListener('scroll', updateScrollBtns);
-
-    window.addEventListener('resize', () => {
-      if (state.region && screens.play.classList.contains('active')) sizeScene();
-    });
-  })();
-
-  function endRound(allFound) {
-    if (state.ended) return;
-    state.ended = true;
-    clearInterval(state.timer);
-    stopGlintLoop();
-
-    const timeBonus = allFound ? state.timeLeft * 2 : 0;
-    state.score += timeBonus;
-    if (timeBonus) toast(`+${timeBonus} time bonus!`);
-    if (allFound) {
-      SOUND.complete();
-      burstConfettiAt(0.5, 0.33, 40, true);
-      setTimeout(() => burstConfettiAt(0.25, 0.55, 24, true), 150);
-      setTimeout(() => burstConfettiAt(0.75, 0.55, 24, true), 300);
-    }
-
-    if (!state.best[state.region.key] || state.score > state.best[state.region.key]) {
-      state.best[state.region.key] = state.score;
-      saveBest();
-    }
-
-    setTimeout(() => showResults(allFound), allFound ? 900 : 300);
-  }
-
-  function showResults(allFound) {
-    const quizTotal = state.artifacts.filter(a => a.quiz).length;
-    const quizCorrect = Object.values(state.quizResult).filter(Boolean).length;
-
-    el('res-grade').textContent = allFound
-      ? (state.timeLeft > state.duration * 0.4 ? 'Master Curator' : 'Gallery Complete')
-      : 'Time’s Up';
-    el('res-sub').textContent = allFound
-      ? `You found every artifact in the ${state.region.name} gallery.`
-      : `You found ${state.foundThisRound.size} of ${state.artifacts.length} artifacts before time ran out.`;
-    el('res-score').textContent = state.score;
-    el('res-found').textContent = `${state.foundThisRound.size}/${state.artifacts.length}`;
-    el('res-quiz').textContent = `${quizCorrect}/${quizTotal}`;
-    const m = Math.floor(Math.max(0, state.timeLeft) / 60);
-    const s = String(Math.max(0, state.timeLeft) % 60).padStart(2, '0');
-    el('res-time').textContent = `${m}:${s}`;
-
-    showScreen('results');
-  }
-
-  // ------------------------------------------------------------- card modal
-
-  function openCard(artifact) {
-    const overlay = el('card-overlay');
-    const firstView = !state.foundThisRound.has(artifact.id);
-
-    state.transformOpen = false;
+  // -------------------------------------------------------------- card
+  function openCard(artifact, fresh) {
     renderCardArt(artifact);
-
     el('card-culture').textContent = artifact.culture;
     el('card-title').textContent = artifact.name;
     el('card-desc').textContent = artifact.desc;
     el('card-use').innerHTML = `<b>Use:</b> ${artifact.use}`;
-
     const note = el('card-note');
-    if (artifact.note) { note.hidden = false; note.textContent = artifact.note; }
-    else { note.hidden = true; note.textContent = ''; }
+    const noteText = [artifact.note, artifact.interactive === 'transform' ? 'Tap the mask to open it.' : ''].filter(Boolean).join(' ');
+    note.hidden = !noteText;
+    note.textContent = noteText;
 
-    const quizBlock = el('quiz-block');
-    const alreadyAnswered = artifact.id in state.quizResult;
-
-    if (artifact.quiz && (firstView || alreadyAnswered)) {
-      quizBlock.hidden = false;
-      renderQuiz(artifact, alreadyAnswered);
+    if (fresh) {
+      const parts = [`+${artifact.points} found`];
+      if (fresh.streakBonus) parts.push(`+${fresh.streakBonus} streak`);
+      parts.push(fresh.solved ? `+${RESTORE_BONUS} restored` : 'puzzle skipped');
+      el('card-points').textContent = parts.join(' · ');
+      el('card-next').textContent = 'Add to collection';
     } else {
-      quizBlock.hidden = true;
+      el('card-points').textContent = 'In your collection';
+      el('card-next').textContent = 'Back to searching';
     }
 
-    const streakEl = el('streak-stat');
-    let pointsMsg = '';
-    if (firstView) {
-      state.foundThisRound.add(artifact.id);
-      state.everFound.add(artifact.id);
-      saveFound();
-
-      const now = Date.now();
-      if (state.lastFoundAt && now - state.lastFoundAt <= STREAK_WINDOW_MS) state.streak++;
-      else state.streak = 1;
-      state.lastFoundAt = now;
-
-      const streakBonus = Math.min((state.streak - 1) * 20, 100);
-      state.score += artifact.points + streakBonus;
-      pointsMsg = streakBonus
-        ? `+${artifact.points} points  ·  +${streakBonus} streak bonus`
-        : `+${artifact.points} points`;
-
-      if (state.streak >= 2) {
-        streakEl.hidden = false;
-        el('hud-streak').textContent = `×${state.streak}`;
-        toast(`Found: ${artifact.name} — Streak ×${state.streak}!`);
-      } else {
-        toast(`Found: ${artifact.name}`);
-      }
-
-      SOUND.found();
-      renderScene();
-      updateHud();
-
-      const hotspot = SCENES[state.region.key].hotspots.find(h => h.id === artifact.id);
-      if (hotspot) burstConfettiAtScene(hotspot.x, hotspot.y, 14);
-    } else {
-      pointsMsg = 'Already identified — reviewing card';
-    }
-    el('card-points').textContent = pointsMsg;
-
-    overlay.classList.add('show');
-
+    el('card-overlay').classList.add('show');
     el('card-next').onclick = () => {
-      overlay.classList.remove('show');
+      el('card-overlay').classList.remove('show');
       SOUND.click();
-      if (state.foundThisRound.size === state.artifacts.length) {
-        endRound(true);
-      }
+      state.paused = false;
+      if (fresh && state.found.length === state.artifacts.length) finishRound(true);
     };
   }
 
   function renderCardArt(artifact) {
     const art = el('card-art');
+    let open = false;
+    art.onclick = null;
+    art.style.cursor = 'default';
     if (artifact.interactive === 'transform') {
-      art.innerHTML = iconStandalone(artifact.icon, state.transformOpen);
+      art.innerHTML = iconStandalone(artifact.icon, false);
       art.style.cursor = 'pointer';
-      art.onclick = () => {
-        state.transformOpen = !state.transformOpen;
-        SOUND.click();
-        art.innerHTML = iconStandalone(artifact.icon, state.transformOpen);
-      };
-      el('card-note').hidden = false;
-      el('card-note').textContent = (artifact.note ? artifact.note + ' ' : '') + 'Tap the mask to open it.';
+      art.onclick = () => { open = !open; SOUND.click(); art.innerHTML = iconStandalone(artifact.icon, open); };
     } else if (artifact.photo) {
       art.innerHTML = `<img src="${artifact.photo}" alt="${artifact.name}">`;
-      art.style.cursor = 'default';
-      art.onclick = null;
     } else {
       art.innerHTML = iconStandalone(artifact.icon);
-      art.style.cursor = 'default';
-      art.onclick = null;
     }
   }
 
-  function renderQuiz(artifact, alreadyAnswered) {
-    el('quiz-q').textContent = artifact.quiz.q;
-    const opts = el('quiz-opts');
-    const noteEl = el('quiz-note');
-    noteEl.textContent = '';
-    opts.innerHTML = artifact.quiz.options.map((opt, i) =>
-      `<button type="button" data-i="${i}">${opt}</button>`).join('');
+  // ------------------------------------------------------------ hints
+  el('hint-btn').addEventListener('click', () => {
+    if (state.hintsLeft <= 0 || state.paused || state.ended) return;
+    const target = state.artifacts.find(a => !state.found.includes(a.id));
+    if (!target) return;
+    state.hintsLeft--;
+    updateHintBtn();
+    SOUND.click();
+    WORLD.hint(target.id);
+    toast('Look where the light is pointing…');
+  });
 
-    const settle = (correct) => {
-      [...opts.children].forEach((b, i) => {
-        b.disabled = true;
-        if (i === artifact.quiz.answer) b.classList.add('correct');
-        else if (Number(b.dataset.i) === Number(opts._picked)) b.classList.add('wrong');
-      });
-      noteEl.textContent = correct
-        ? 'Correct! Bonus points added.'
-        : `Not quite — the correct answer is highlighted.`;
-    };
-
-    if (alreadyAnswered) {
-      opts._picked = -1;
-      settle(state.quizResult[artifact.id]);
-      return;
+  // ------------------------------------------------------------ finish
+  function finishRound(allFound) {
+    if (state.ended) return;
+    state.ended = true;
+    clearInterval(state.timer);
+    if (allFound) {
+      const bonus = state.timeLeft * 2;
+      state.score += bonus;
+      SOUND.complete();
+      burstConfettiAt(0.5, 0.35, 40, true);
+      setTimeout(() => burstConfettiAt(0.25, 0.55, 24, true), 150);
+      setTimeout(() => burstConfettiAt(0.75, 0.55, 24, true), 300);
+      toast(`Gallery cleared! +${bonus} time bonus`);
+    } else {
+      toast('Time’s up! Let’s see what you learned.');
     }
+    updateHud();
+    setTimeout(() => {
+      WORLD.setActive(false);
+      if (state.found.length) startQuiz(allFound);
+      else showResults(allFound);
+    }, allFound ? 1400 : 1100);
+  }
 
-    [...opts.children].forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (artifact.id in state.quizResult) return;
-        const i = Number(btn.dataset.i);
-        opts._picked = i;
-        const correct = i === artifact.quiz.answer;
-        state.quizResult[artifact.id] = correct;
-        if (correct) { state.score += 50; updateHud(); SOUND.correct(); }
-        else SOUND.wrong();
-        settle(correct);
-      });
+  // --------------------------------------------------- curator's quiz
+  // Questions only ever cover artifacts the player found and read about
+  // this round, and every answer is on the card they just read.
+  function buildQuiz() {
+    const found = shuffle(state.found.map(byId));
+    const list = [];
+    found.filter(a => a.quiz).slice(0, 2).forEach(a => {
+      const order = shuffle(a.quiz.options.map((_, i) => i));
+      list.push({ kind: 'text', artifact: a, q: a.quiz.q, options: order.map(i => a.quiz.options[i]), answer: order.indexOf(a.quiz.answer) });
     });
+    const rest = found.filter(a => !list.some(x => x.artifact === a));
+    const want = Math.min(4, found.length + list.length);
+    let k = 0;
+    while (list.length < want && rest.length) {
+      const a = rest.shift();
+      if (k++ % 2 === 0) {
+        const pool = shuffle(ARTIFACTS.filter(x => x.id !== a.id && x.region === a.region));
+        const opts = shuffle([a, ...pool.slice(0, 3)]);
+        list.push({ kind: 'picture', artifact: a, q: `Which of these is the ${a.name}?`, options: opts, answer: opts.indexOf(a) });
+      } else {
+        const cultures = [...new Set(ARTIFACTS.filter(x => x.culture !== a.culture).map(x => x.culture))];
+        const opts = shuffle([a.culture, ...shuffle(cultures).slice(0, 3)]);
+        list.push({ kind: 'text', artifact: a, q: `Which people or culture made the ${a.name}?`, options: opts, answer: opts.indexOf(a.culture) });
+      }
+    }
+    if (!list.length && found.length) {
+      const a = found[0];
+      const pool = shuffle(ARTIFACTS.filter(x => x.id !== a.id));
+      const opts = shuffle([a, ...pool.slice(0, 3)]);
+      list.push({ kind: 'picture', artifact: a, q: `Which of these is the ${a.name}?`, options: opts, answer: opts.indexOf(a) });
+    }
+    return shuffle(list);
   }
 
-  // ---------------------------------------------------------------- notebook modal
+  function startQuiz(allFound) {
+    state.quiz = { list: buildQuiz(), i: 0, correct: 0, peeked: false, allFound };
+    el('quiz-overlay').classList.add('show');
+    renderQuestion();
+  }
 
+  function renderQuestion() {
+    const qz = state.quiz, item = qz.list[qz.i];
+    qz.peeked = false;
+    el('rq-progress').textContent = `Question ${qz.i + 1} of ${qz.list.length} · ${QUIZ_POINTS} points each`;
+    el('rq-q').textContent = item.q;
+    el('rq-note').textContent = '';
+    el('rq-peek-box').hidden = true;
+    el('rq-peek').hidden = false;
+    el('rq-peek').disabled = false;
+    el('rq-next').hidden = true;
+    const opts = el('rq-opts');
+    opts.className = `rq-opts ${item.kind === 'picture' ? 'rq-pictures' : ''}`;
+    opts.innerHTML = item.options.map((o, i) => item.kind === 'picture'
+      ? `<button type="button" class="rq-pic" data-i="${i}" aria-label="Option ${i + 1}"><img src="${imageFor(o)}" alt=""></button>`
+      : `<button type="button" data-i="${i}">${o}</button>`).join('');
+    [...opts.children].forEach(btn => btn.addEventListener('click', () => answer(Number(btn.dataset.i))));
+  }
+
+  function answer(i) {
+    const qz = state.quiz, item = qz.list[qz.i];
+    const btns = [...el('rq-opts').children];
+    btns.forEach((b, j) => {
+      b.disabled = true;
+      if (j === item.answer) b.classList.add('correct');
+      else if (j === i) b.classList.add('wrong');
+    });
+    el('rq-peek').hidden = true;
+    const correct = i === item.answer;
+    if (correct) {
+      qz.correct++;
+      const pts = QUIZ_POINTS - (qz.peeked ? PEEK_COST : 0);
+      state.score += pts;
+      SOUND.correct();
+      el('rq-note').textContent = `Correct! +${pts}`;
+    } else {
+      SOUND.wrong();
+      const a = item.artifact;
+      el('rq-note').textContent = item.kind === 'picture'
+        ? `Not quite — the highlighted one is the ${a.name}.`
+        : `Not quite — from the card: ${a.desc.split('. ')[0]}.`;
+    }
+    el('rq-next').textContent = qz.i === qz.list.length - 1 ? 'See results' : 'Next';
+    el('rq-next').hidden = false;
+  }
+
+  el('rq-peek').addEventListener('click', () => {
+    const item = state.quiz.list[state.quiz.i];
+    state.quiz.peeked = true;
+    el('rq-peek').disabled = true;
+    const box = el('rq-peek-box');
+    box.hidden = false;
+    box.textContent = item.kind === 'picture'
+      ? `${item.artifact.name}: ${item.artifact.desc}`
+      : `${item.artifact.name} (${item.artifact.culture}): ${item.artifact.desc} Use: ${item.artifact.use}`;
+  });
+
+  el('rq-next').addEventListener('click', () => {
+    SOUND.click();
+    const qz = state.quiz;
+    if (qz.i < qz.list.length - 1) { qz.i++; renderQuestion(); return; }
+    el('quiz-overlay').classList.remove('show');
+    showResults(qz.allFound);
+  });
+
+  // ----------------------------------------------------------- results
+  function showResults(allFound) {
+    if (!state.best[state.region.key] || state.score > state.best[state.region.key]) {
+      state.best[state.region.key] = state.score;
+      saveBest();
+    }
+    const qz = state.quiz;
+    const total = state.artifacts.length, n = state.found.length;
+    el('res-grade').textContent = allFound
+      ? (qz.correct === qz.list.length && state.restored.size === n ? 'Master Curator' : 'Gallery Complete')
+      : (n ? 'Time’s Up' : 'Nothing Found');
+    el('res-sub').textContent = allFound
+      ? `You found and studied every artifact in the ${state.region.name} gallery.`
+      : `You found ${n} of ${total} artifacts before time ran out.`;
+    el('res-score').textContent = state.score;
+    el('res-found').textContent = `${n}/${total}`;
+    el('res-puzzles').textContent = `${state.restored.size}/${n}`;
+    el('res-quiz').textContent = `${qz.correct}/${qz.list.length}`;
+    showScreen('results');
+  }
+
+  // ---------------------------------------------------------- notebook
   function openNotebook() {
+    state.paused = true;
     renderNotebook(el('notebook-grid-modal'));
     el('notebook-overlay').classList.add('show');
   }
+  function closeNotebook() {
+    el('notebook-overlay').classList.remove('show');
+    state.paused = false;
+  }
 
-  // ---------------------------------------------------------------- tutorial
-
+  // ---------------------------------------------------------- tutorial
   const TUTORIAL_SLIDES = [
     {
       title: 'Welcome, Curator!',
-      text: 'Five illustrated galleries from around the world are waiting — Asia, Africa, Europe, Oceania and North America — each hiding real artifacts from native communities.',
+      text: 'The museum is closed for the night. Five galleries — Asia, Africa, Europe, Oceania and North America — each have real artifacts hidden somewhere in their storerooms.',
       art: `<svg viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="#1f8a83"/>
         <path d="M100,20 Q140,60 100,100 Q60,140 100,180" stroke="#fff8ec" stroke-width="5" fill="none"/>
         <path d="M20,100 Q60,60 100,100 Q140,140 180,100" stroke="#fff8ec" stroke-width="5" fill="none"/>
-        ${[[100,40],[160,80],[150,150],[60,160],[45,70]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="10" fill="#f2a63d" stroke="#3a2a1e" stroke-width="3"/>`).join('')}
+        ${[[100, 40], [160, 80], [150, 150], [60, 160], [45, 70]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="10" fill="#f2a63d" stroke="#3a2a1e" stroke-width="3"/>`).join('')}
       </svg>`,
     },
     {
-      title: 'Explore & Look Closely',
-      text: 'Each gallery is wider than your screen — scroll, drag, or use the arrow buttons to look around. Artifacts blend into the scene, so watch for a faint glint that hints where to look.',
-      art: `<svg viewBox="0 0 200 200">
-        <rect x="10" y="60" width="180" height="90" rx="10" fill="none" stroke="#3a2a1e" stroke-width="4"/>
-        <circle cx="70" cy="105" r="14" fill="#a3652f"/>
-        <circle cx="140" cy="105" r="10" fill="#f2a63d" opacity=".9"/>
-        <path d="M20,170 L40,170 M160,170 L180,170" stroke="#d9603b" stroke-width="6" stroke-linecap="round"/>
-        <path d="M30,160 l-10,10 l10,10 M170,160 l10,10 l-10,10" stroke="#d9603b" stroke-width="5" fill="none" stroke-linecap="round"/>
-      </svg>`,
+      title: 'Search with your flashlight',
+      text: 'It’s dark in there. Drag to look around the room, or hold the big arrow buttons. Your flashlight shines wherever you last touched. Pinch or use + and − to zoom.',
+      art: `<svg viewBox="0 0 200 200"><rect width="200" height="200" rx="16" fill="#1a120c"/>
+        <path d="M30,170 L130,60 L170,100 Z" fill="#fff1d6" opacity=".35"/>
+        <rect x="16" y="160" width="40" height="22" rx="6" fill="#d9603b" transform="rotate(-40 36 171)"/>
+        <circle cx="140" cy="82" r="14" fill="#f2a63d"/></svg>`,
     },
     {
-      title: 'Learn & Answer',
-      text: 'Each card tells the real story — who made it and how it was used. Some hide a bonus trivia question: answer correctly for +50 points.',
+      title: 'Open everything',
+      text: 'Artifacts hide inside chests, drawers, crates and baskets, under cloths, on shelves and behind pillars. Tap any of them to open it and move in for a close look — drag to peek around, then tap “Back to room”. Watch for a faint glint.',
+      art: `<svg viewBox="0 0 200 200"><rect x="40" y="100" width="120" height="70" rx="6" fill="#6b2f1a" stroke="#3a2a1e" stroke-width="4"/>
+        <path d="M36,100 L60,50 L164,50 L164,100 Z" fill="#8c3a22" stroke="#3a2a1e" stroke-width="4"/>
+        <circle cx="100" cy="92" r="16" fill="#f2a63d"/><path d="M100,64 v-16 M80,72 l-10,-10 M120,72 l10,-10" stroke="#fff3c6" stroke-width="5" stroke-linecap="round"/></svg>`,
+    },
+    {
+      title: 'Restore what you find',
+      text: 'Every artifact needs restoring before it joins your collection: a jigsaw, broken shards, sliding tiles, or a layer of dust to brush away. You can skip a puzzle, but restoring earns a bonus.',
+      art: `<svg viewBox="0 0 200 200">${[0, 1, 2].map(r => [0, 1, 2].map(c => `<rect x="${40 + c * 42}" y="${40 + r * 42}" width="38" height="38" rx="4" fill="${(r + c) % 2 ? '#f2a63d' : '#d9603b'}" ${r === 2 && c === 2 ? 'transform="translate(14 18) rotate(12 140 140)"' : ''}/>`).join('')).join('')}</svg>`,
+    },
+    {
+      title: 'Read, then take the quiz',
+      text: 'Each card tells the artifact’s real story. When the gallery is done, the curator asks a few questions — only about artifacts you found, and every answer is on their cards. Stuck? Peek at the card for a small cost.',
       art: `<svg viewBox="0 0 200 200"><rect x="40" y="30" width="120" height="140" rx="14" fill="#fff8ec" stroke="#3a2a1e" stroke-width="4"/>
         <rect x="58" y="52" width="84" height="10" rx="5" fill="#d9603b"/>
         <rect x="58" y="74" width="84" height="7" rx="3.5" fill="#e8cf9d"/>
         <rect x="58" y="90" width="60" height="7" rx="3.5" fill="#e8cf9d"/>
         <circle cx="100" cy="135" r="22" fill="#5a8f3c"/>
-        <path d="M90,135 l7,8 l14,-16" stroke="#fff8ec" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      </svg>`,
-    },
-    {
-      title: 'Beat the Clock',
-      text: 'Find everything before time runs out for a big completion bonus. Chain quick finds together to build a streak multiplier, and spend a Hint if one artifact is hiding too well — you get three per gallery.',
-      art: `<svg viewBox="0 0 200 200"><circle cx="100" cy="110" r="70" fill="#fff8ec" stroke="#3a2a1e" stroke-width="6"/>
-        <path d="M100,110 L100,60 M100,110 L135,120" stroke="#d9603b" stroke-width="6" stroke-linecap="round"/>
-        <rect x="85" y="24" width="30" height="12" rx="4" fill="#3a2a1e"/>
-        ${[[40,50],[160,50],[30,150],[170,150]].map(([x,y])=>`<path d="M${x},${y} l6,6 m0,-6 l-6,6" stroke="#f2a63d" stroke-width="4" stroke-linecap="round"/>`).join('')}
-      </svg>`,
+        <path d="M90,135 l7,8 l14,-16" stroke="#fff8ec" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
     },
   ];
 
   let tutorialIndex = 0;
-
   function renderTutorial() {
     const slide = TUTORIAL_SLIDES[tutorialIndex];
     el('tutorial-art').innerHTML = slide.art;
     el('tutorial-title').textContent = slide.title;
     el('tutorial-text').textContent = slide.text;
-    el('tutorial-dots').innerHTML = TUTORIAL_SLIDES.map((_, i) =>
-      `<span class="dot ${i === tutorialIndex ? 'active' : ''}"></span>`).join('');
+    el('tutorial-dots').innerHTML = TUTORIAL_SLIDES.map((_, i) => `<span class="dot ${i === tutorialIndex ? 'active' : ''}"></span>`).join('');
     el('tutorial-back').disabled = tutorialIndex === 0;
     el('tutorial-next').textContent = tutorialIndex === TUTORIAL_SLIDES.length - 1 ? 'Let’s go!' : 'Next';
   }
-
+  let pausedBeforeTutorial = false;
   function openTutorial() {
+    pausedBeforeTutorial = state.paused;
+    state.paused = true;
     tutorialIndex = 0;
     renderTutorial();
     el('tutorial-overlay').classList.add('show');
   }
   function closeTutorial() {
     el('tutorial-overlay').classList.remove('show');
+    state.paused = pausedBeforeTutorial;
     try { localStorage.setItem(LS_SEEN_TUTORIAL, '1'); } catch {}
   }
-
   el('tutorial-next').addEventListener('click', () => {
     SOUND.click();
     if (tutorialIndex === TUTORIAL_SLIDES.length - 1) { closeTutorial(); return; }
@@ -710,13 +591,10 @@
     renderTutorial();
   });
   el('tutorial-skip').addEventListener('click', closeTutorial);
-  el('tutorial-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) closeTutorial();
-  });
+  el('tutorial-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeTutorial(); });
   el('howto-btn').addEventListener('click', openTutorial);
 
-  // ---------------------------------------------------------------- sound toggle
-
+  // ------------------------------------------------------------ sound
   const soundBtn = el('sound-btn');
   function refreshSoundBtn() {
     soundBtn.textContent = SOUND.isMuted() ? '\u{1F507}' : '\u{1F50A}';
@@ -729,29 +607,22 @@
   });
   refreshSoundBtn();
 
-  // ---------------------------------------------------------------- wiring
-
-  el('quit-btn').addEventListener('click', () => {
+  // ----------------------------------------------------------- wiring
+  function leaveToMenu() {
     clearInterval(state.timer);
-    stopGlintLoop();
-    SOUND.click();
+    state.ended = true;
+    if (worldReady) WORLD.setActive(false);
     renderIntro();
     showScreen('intro');
-  });
+  }
+  el('quit-btn').addEventListener('click', () => { SOUND.click(); leaveToMenu(); });
   el('notebook-btn').addEventListener('click', () => { SOUND.click(); openNotebook(); });
-  el('notebook-close').addEventListener('click', () => { SOUND.click(); el('notebook-overlay').classList.remove('show'); });
+  el('notebook-close').addEventListener('click', () => { SOUND.click(); closeNotebook(); });
+  el('notebook-overlay').addEventListener('click', (e) => { if (e.target === e.currentTarget) closeNotebook(); });
   el('replay-btn').addEventListener('click', () => { SOUND.click(); startRegion(state.region.key); });
-  el('menu-btn').addEventListener('click', () => { SOUND.click(); renderIntro(); showScreen('intro'); });
-
-  el('card-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) el('card-next').click();
-  });
-  el('notebook-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) el('notebook-overlay').classList.remove('show');
-  });
+  el('menu-btn').addEventListener('click', () => { SOUND.click(); leaveToMenu(); });
 
   renderIntro();
-
   let seenTutorial = false;
   try { seenTutorial = localStorage.getItem(LS_SEEN_TUTORIAL) === '1'; } catch {}
   if (!seenTutorial) openTutorial();

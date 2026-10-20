@@ -1,13 +1,8 @@
 /* ==================================================================
-   Virtual Artifact Hunt — scene backdrops
-   Each region is one illustrated SVG backdrop, now wide enough that it
-   doesn't fit in one screen — players scroll/drag through it. Height
-   stays a fixed 900; `width` varies per region and is exported so
-   game.js can size the scrollable canvas and thumbnails correctly.
-   Everything is drawn with flat shapes and gradients — no external
-   images. Backgrounds are split into `back` (behind hotspots) and
-   `front` (drawn after hotspots, so a couple of props sit in front of
-   and partially occlude the artifact nearest them).
+   Virtual Artifact Hunt — gallery thumbnails
+   Flat illustrated SVG backdrops, one per region, shown on the home
+   screen's gallery cards. (The galleries themselves are 3D — see
+   world.js.) Drawn entirely with shapes and gradients, no images.
    ================================================================== */
 
 const SCENES = (() => {
@@ -297,59 +292,27 @@ const SCENES = (() => {
     return { back, front };
   }
 
-  // Hotspot layout per region: {artifactId, x, y, r} spread across the
-  // region's full width. r is now used purely for icon scale + click
-  // radius, not a glowing disc.
+  // Backdrop definitions — used for the gallery thumbnails on the home screen.
   const REGION_SCENES = {
     asia: {
       width: 3400,
       bg: asiaBg,
-      hotspots: [
-        { id: 'cham-dance-mask', x: 150, y: 480, r: 56 },
-        { id: 'noh-mask', x: 560, y: 500, r: 54 },
-        { id: 'barong-mask', x: 1180, y: 470, r: 58 },
-        { id: 'mahakala-mask', x: 2050, y: 700, r: 56 },
-        { id: 'po-nagar-statue', x: 2900, y: 640, r: 66 },
-      ],
     },
     africa: {
       width: 3400,
       bg: africaBg,
-      hotspots: [
-        { id: 'nguni-mask', x: 260, y: 640, r: 56 },
-        { id: 'gelede-mask', x: 900, y: 420, r: 56 },
-        { id: 'kanaga-mask', x: 1650, y: 440, r: 60 },
-        { id: 'punu-mask', x: 2350, y: 660, r: 56 },
-        { id: 'golden-stool', x: 3050, y: 760, r: 66 },
-      ],
     },
     europe: {
       width: 2600,
       bg: europeBg,
-      hotspots: [
-        { id: 'celtic-horned-mask', x: 300, y: 580, r: 58 },
-        { id: 'mamuthones-mask', x: 1280, y: 580, r: 58 },
-        { id: 'cernunnos-figure', x: 2260, y: 580, r: 62 },
-      ],
     },
     oceania: {
       width: 2600,
       bg: oceaniaBg,
-      hotspots: [
-        { id: 'tiwi-pukumani-mask', x: 340, y: 480, r: 58 },
-        { id: 'asmat-spirit-mask', x: 1300, y: 450, r: 60 },
-        { id: 'tiki-figure', x: 2260, y: 490, r: 62 },
-      ],
     },
     namerica: {
       width: 3000,
       bg: namericaBg,
-      hotspots: [
-        { id: 'pakal-jade-mask', x: 460, y: 720, r: 58 },
-        { id: 'chaac-statue', x: 980, y: 440, r: 60 },
-        { id: 'transformation-mask', x: 1900, y: 780, r: 58 },
-        { id: 'hamatsa-mask', x: 2650, y: 440, r: 58 },
-      ],
     },
   };
 
@@ -357,7 +320,7 @@ const SCENES = (() => {
   Object.keys(REGION_SCENES).forEach(key => {
     const def = REGION_SCENES[key];
     const { back, front } = def.bg(def.width);
-    built[key] = { width: def.width, back, front, hotspots: def.hotspots };
+    built[key] = { width: def.width, back, front };
   });
   return built;
 })();

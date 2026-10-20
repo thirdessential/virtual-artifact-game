@@ -314,11 +314,156 @@ const ICONS = (() => {
     `);
   }
 
+  // ------------------------------------------------ researched additions
+
+  function dongSonDrum() {
+    const star = [...Array(12)].map((_, i) => {
+      const a = (Math.PI * 2 * i) / 12, r = i % 2 ? 9 : 22;
+      return `${(100 + Math.cos(a) * r).toFixed(1)},${(62 + Math.sin(a) * r * 0.34).toFixed(1)}`;
+    }).join(' ');
+    return wrap(`
+      <path d="M22,62 Q14,112 36,132 L42,196 L158,196 L164,132 Q186,112 178,62 Z" fill="#6f6a34" stroke="${STROKE}" stroke-width="4"/>
+      <path d="M30,108 Q100,128 170,108 M38,150 Q100,166 162,150" stroke="#4d4a22" stroke-width="4" fill="none"/>
+      ${[...Array(7)].map((_, i) => `<path d="M${52 + i * 16},160 l6,-10 l6,10" stroke="#a89a52" stroke-width="3" fill="none"/>`).join('')}
+      <ellipse cx="100" cy="62" rx="80" ry="27" fill="#9a8a44" stroke="${STROKE}" stroke-width="4"/>
+      <ellipse cx="100" cy="62" rx="58" ry="19" fill="none" stroke="#6f6a34" stroke-width="3"/>
+      <ellipse cx="100" cy="62" rx="38" ry="12" fill="none" stroke="#6f6a34" stroke-width="3"/>
+      <polygon points="${star}" fill="#e8d27a" stroke="#4d4a22" stroke-width="1.5"/>
+    `);
+  }
+
+  function nataraja() {
+    const flames = [...Array(18)].map((_, i) => {
+      const a = Math.PI * (0.95 + (1.1 * i) / 17), x = 100 + Math.cos(a) * 82, y = 112 + Math.sin(a) * 82;
+      return `<path d="M${x.toFixed(1)},${y.toFixed(1)} l${(Math.cos(a) * 12).toFixed(1)},${(Math.sin(a) * 12).toFixed(1)}" stroke="#f2a63d" stroke-width="6" stroke-linecap="round"/>`;
+    }).join('');
+    return wrap(`
+      <path d="M22,150 A80,80 0 1,1 178,150" fill="none" stroke="#b07a3a" stroke-width="9"/>
+      ${flames}
+      <circle cx="100" cy="60" r="16" fill="#b07a3a" stroke="${STROKE}" stroke-width="3"/>
+      <path d="M86,48 L100,32 L114,48" fill="#d9a65a" stroke="${STROKE}" stroke-width="2"/>
+      <path d="M100,76 L100,132" stroke="#b07a3a" stroke-width="16" stroke-linecap="round"/>
+      <path d="M100,88 L60,72 M100,88 L140,76 M100,98 L66,118 M100,98 L146,104" stroke="#b07a3a" stroke-width="8" stroke-linecap="round"/>
+      <path d="M100,132 L84,178 M100,132 L140,140 L150,120" stroke="#b07a3a" stroke-width="10" stroke-linecap="round" fill="none"/>
+      <ellipse cx="80" cy="186" rx="22" ry="8" fill="#7a5226" stroke="${STROKE}" stroke-width="2"/>
+      <rect x="40" y="194" width="120" height="16" rx="4" fill="#8c5a34" stroke="${STROKE}" stroke-width="3"/>
+    `);
+  }
+
+  function beninPlaque() {
+    const rosette = (x, y) => `<g transform="translate(${x} ${y})"><circle r="9" fill="#d9a54a"/>${[0, 1, 2, 3].map(i => `<ellipse rx="3" ry="8" fill="#a8742a" transform="rotate(${i * 45})"/>`).join('')}</g>`;
+    return wrap(`
+      <rect x="28" y="14" width="144" height="196" rx="6" fill="#c08a3a" stroke="${STROKE}" stroke-width="4"/>
+      ${[[46, 32], [154, 32], [46, 192], [154, 192], [46, 112], [154, 112]].map(([x, y]) => rosette(x, y)).join('')}
+      <path d="M86,54 L100,38 L114,54 L114,66 L86,66 Z" fill="#8c5a20" stroke="${STROKE}" stroke-width="2"/>
+      <circle cx="100" cy="78" r="15" fill="#a8742a" stroke="${STROKE}" stroke-width="3"/>
+      <path d="M90,96 Q100,90 110,96 L118,160 L82,160 Z" fill="#a8742a" stroke="${STROKE}" stroke-width="3"/>
+      ${[0, 1, 2, 3].map(i => `<path d="M88,${100 + i * 6} h24" stroke="#d9a54a" stroke-width="2"/>`).join('')}
+      <path d="M86,112 L66,132 M114,112 L134,124 L134,96" stroke="#a8742a" stroke-width="7" stroke-linecap="round" fill="none"/>
+      <path d="M90,160 L88,188 M110,160 L112,188" stroke="#a8742a" stroke-width="8" stroke-linecap="round"/>
+      <circle cx="40" cy="22" r="3" fill="${STROKE}"/><circle cx="160" cy="22" r="3" fill="${STROKE}"/>
+    `);
+  }
+
+  function kenteCloth() {
+    const cols = ['#f2a63d', '#1f8a83', '#c1416a', '#f2a63d', '#3a2a1e', '#1f8a83'];
+    const strips = cols.map((c, i) => {
+      const x = 24 + i * 25;
+      const blocks = [0, 1, 2, 3].map(j => `<rect x="${x}" y="${30 + j * 40}" width="25" height="20" fill="${j % 2 ? '#3a2a1e' : '#5a8f3c'}"/>
+        <path d="M${x},${50 + j * 40} l6,10 l6,-10 l7,10 l6,-10" stroke="#fff3c6" stroke-width="2" fill="none"/>`).join('');
+      return `<rect x="${x}" y="20" width="25" height="166" fill="${c}"/>${blocks}`;
+    }).join('');
+    return wrap(`
+      ${strips}
+      <rect x="24" y="20" width="150" height="166" fill="none" stroke="${STROKE}" stroke-width="4"/>
+      ${[...Array(15)].map((_, i) => `<path d="M${28 + i * 10},188 v16" stroke="#d9871c" stroke-width="3"/>`).join('')}
+    `);
+  }
+
+  function gundestrupCauldron() {
+    return wrap(`
+      <path d="M20,74 Q22,186 100,196 Q178,186 180,74 Z" fill="#b9bec4" stroke="${STROKE}" stroke-width="4"/>
+      <ellipse cx="100" cy="74" rx="80" ry="18" fill="#d9dde1" stroke="${STROKE}" stroke-width="4"/>
+      <path d="M40,94 L40,160 M80,96 L80,176 M120,96 L120,176 M160,94 L160,160" stroke="#8a9096" stroke-width="3"/>
+      <circle cx="100" cy="128" r="14" fill="#9aa0a6" stroke="${STROKE}" stroke-width="2"/>
+      <path d="M90,116 L80,96 L72,104 M80,96 L84,88 M110,116 L120,96 L128,104 M120,96 L116,88" stroke="#d9a54a" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="60" cy="130" r="9" fill="none" stroke="#d9a54a" stroke-width="3"/>
+      <path d="M140,120 q8,8 0,16 q-8,8 0,16" stroke="#d9a54a" stroke-width="3" fill="none"/>
+    `);
+  }
+
+  function lewisChessman() {
+    return wrap(`
+      <path d="M48,60 L152,60 L156,196 L44,196 Z" fill="#e6d7b4" stroke="${STROKE}" stroke-width="4"/>
+      ${[0, 1, 2].map(i => `<path d="M52,${80 + i * 16} h96" stroke="#c9b68a" stroke-width="3"/>`).join('')}
+      <path d="M66,96 L134,96 L140,196 L60,196 Z" fill="#efe3c8" stroke="${STROKE}" stroke-width="3"/>
+      <circle cx="100" cy="74" r="22" fill="#efe3c8" stroke="${STROKE}" stroke-width="3"/>
+      <path d="M78,58 L84,40 L92,52 L100,36 L108,52 L116,40 L122,58 Z" fill="#e6d7b4" stroke="${STROKE}" stroke-width="3"/>
+      ${eye(92, 72, 4)}${eye(108, 72, 4)}
+      <path d="M92,86 Q100,82 108,86" stroke="${STROKE}" stroke-width="2.5" fill="none"/>
+      <path d="M70,140 L130,124" stroke="#a8946a" stroke-width="7" stroke-linecap="round"/>
+      <path d="M78,112 Q100,126 122,112" stroke="#c9b68a" stroke-width="4" fill="none"/>
+    `);
+  }
+
+  function moai() {
+    return wrap(`
+      <rect x="30" y="192" width="140" height="22" rx="3" fill="#6b5f50" stroke="${STROKE}" stroke-width="3"/>
+      <path d="M62,40 L138,40 L146,150 Q140,192 100,192 Q60,192 54,150 Z" fill="#7d7468" stroke="${STROKE}" stroke-width="4"/>
+      <ellipse cx="100" cy="34" rx="38" ry="12" fill="#a8523a" stroke="${STROKE}" stroke-width="3"/>
+      <path d="M64,78 L136,78" stroke="#4f483f" stroke-width="10" stroke-linecap="round"/>
+      <path d="M100,80 L92,132 Q100,140 108,132 Z" fill="#6b6357" stroke="${STROKE}" stroke-width="2"/>
+      <path d="M80,152 L120,152" stroke="#4f483f" stroke-width="6" stroke-linecap="round"/>
+      <path d="M58,96 L52,140 M142,96 L148,140" stroke="#4f483f" stroke-width="5" stroke-linecap="round"/>
+    `);
+  }
+
+  function boomerang() {
+    const dots = [[50, 150], [62, 130], [74, 110], [88, 92], [104, 80], [122, 74], [140, 72], [158, 74], [70, 140], [96, 102]];
+    return wrap(`
+      <path d="M26,168 Q60,80 110,62 Q150,50 182,66 L176,84 Q146,72 114,84 Q74,104 46,178 Z" fill="#8c5a34" stroke="${STROKE}" stroke-width="4"/>
+      ${dots.map(([x, y], i) => `<circle cx="${x}" cy="${y}" r="${i % 3 ? 3 : 4}" fill="${i % 2 ? '#fff8ec' : '#f2a63d'}"/>`).join('')}
+      <path d="M44,160 Q80,98 118,78" stroke="#d9603b" stroke-width="2" stroke-dasharray="3 5" fill="none"/>
+    `);
+  }
+
+  function sunStone() {
+    const signs = [...Array(20)].map((_, i) => {
+      const a = (Math.PI * 2 * i) / 20, x = 100 + Math.cos(a) * 58, y = 112 + Math.sin(a) * 58;
+      return `<rect x="${(x - 5).toFixed(1)}" y="${(y - 5).toFixed(1)}" width="10" height="10" fill="#a39b8c" stroke="#5a5348" stroke-width="1.5" transform="rotate(${(a * 180 / Math.PI).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})"/>`;
+    }).join('');
+    return wrap(`
+      <circle cx="100" cy="112" r="92" fill="#8b8478" stroke="${STROKE}" stroke-width="4"/>
+      <circle cx="100" cy="112" r="74" fill="none" stroke="#5a5348" stroke-width="3"/>
+      ${signs}
+      <circle cx="100" cy="112" r="44" fill="#9c958a" stroke="#5a5348" stroke-width="3"/>
+      ${[0, 1, 2, 3].map(i => `<path d="M100,112 L${(100 + Math.cos(Math.PI / 4 + i * Math.PI / 2) * 44).toFixed(1)},${(112 + Math.sin(Math.PI / 4 + i * Math.PI / 2) * 44).toFixed(1)}" stroke="#5a5348" stroke-width="4"/>`).join('')}
+      <circle cx="100" cy="112" r="20" fill="#b3ab9e" stroke="${STROKE}" stroke-width="3"/>
+      ${eye(93, 108, 3)}${eye(107, 108, 3)}
+      <path d="M94,120 L100,128 L106,120" fill="#c1416a"/>
+    `);
+  }
+
+  function dineBlanket() {
+    const bands = ['#b6472a', '#1c130b', '#fff8ec', '#3c4a8c', '#fff8ec', '#1c130b', '#b6472a'];
+    return wrap(`
+      ${bands.map((c, i) => `<rect x="20" y="${24 + i * 24}" width="160" height="24" fill="${c}"/>`).join('')}
+      <path d="M100,60 L140,108 L100,156 L60,108 Z" fill="#b6472a" stroke="#1c130b" stroke-width="4"/>
+      <path d="M100,84 L120,108 L100,132 L80,108 Z" fill="#fff8ec" stroke="#1c130b" stroke-width="3"/>
+      <path d="M20,108 L44,96 L44,120 Z M180,108 L156,96 L156,120 Z" fill="#3c4a8c"/>
+      <rect x="20" y="24" width="160" height="168" fill="none" stroke="${STROKE}" stroke-width="4"/>
+      ${[...Array(16)].map((_, i) => `<path d="M${25 + i * 10},194 v14" stroke="#a3896a" stroke-width="3"/>`).join('')}
+    `);
+  }
+
   return {
     chamMask, nohMask, barongMask, mahakalaMask, poNagarStatue,
     nguniMask, geledeMask, kanagaMask, punuMask, goldenStool,
     celticHornedMask, mamuthonesMask, cernunnosFigure,
     tiwiMask, asmatMask, tikiFigure,
     jadeMask, chaacStatue, transformMask, hamatsaMask,
+    dongSonDrum, nataraja, beninPlaque, kenteCloth,
+    gundestrupCauldron, lewisChessman, moai, boomerang,
+    sunStone, dineBlanket,
   };
 })();

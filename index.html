@@ -4,8 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Virtual Artifact Hunt</title>
-<meta name="description" content="Explore five illustrated galleries of a digital museum and hunt for 20 real artifacts from native communities around the world.">
-<link rel="stylesheet" href="css/style.css?v=4">
+<meta name="description" content="Search five dim 3D museum galleries with a flashlight, restore the artifacts you find, and learn the stories of 30 real artifacts from native communities around the world.">
+<link rel="stylesheet" href="css/style.css?v=10">
 </head>
 <body>
 
@@ -25,22 +25,22 @@
   <!-- ============================ INTRO ============================ -->
   <section class="screen active" id="screen-intro">
     <p class="intro-lede">
-      Step into the gallery. Pick a region below, explore its illustrated scene, and click on
-      every artifact you can find before the clock runs out. Each one opens a card with its
-      story &mdash; and some hide a bonus trivia question worth extra points.
+      The museum is closed and the lights are off. Pick a gallery, take your flashlight, and
+      search its storeroom: open chests, pull out drawers, lift cloths. Restore each artifact
+      you find, read its story, then see how much you remember in the curator&rsquo;s quiz.
     </p>
 
     <div class="region-grid" id="region-grid"></div>
 
     <div class="notebook-preview" id="notebook-preview">
-      <h2>Field Notebook</h2>
-      <p class="notebook-sub">Your progress across all five regions.</p>
+      <h2>Collection</h2>
+      <p class="notebook-sub">Every artifact you&rsquo;ve restored, across all five galleries.</p>
       <div class="notebook-grid" id="notebook-grid"></div>
     </div>
 
     <p class="footnote">
-      Gallery scenes are original illustrations drawn in code. Artifact photos shown on each
-      card are placeholder images and are pending a licensing review before public release.
+      Galleries and illustrations are drawn in code. Artifact photos on the cards are placeholder
+      images pending a licensing review, and entries marked &ldquo;Draft&rdquo; are pending client review.
     </p>
   </section>
 
@@ -60,22 +60,36 @@
       <div class="stat timer" id="timer-stat"><div class="val" id="hud-time">0:00</div><div class="lbl">Time left</div></div>
 
       <button class="btn btn-ghost" id="hint-btn" type="button">Hint (3)</button>
-      <button class="btn btn-ghost" id="notebook-btn" type="button">Field notebook</button>
+      <button class="btn btn-ghost" id="notebook-btn" type="button">Collection</button>
       <button class="btn btn-ghost" id="quit-btn" type="button">Leave gallery</button>
 
       <div class="timebar" id="timebar"><i></i></div>
     </div>
 
     <div class="scene-wrap">
-      <button class="scroll-btn scroll-btn-left" id="scroll-left-btn" type="button" aria-label="Look left">&#8592;</button>
-      <div class="scene-scroll" id="scene-scroll">
-        <svg id="scene" role="application" aria-label="Illustrated gallery scene. Scroll to explore, and click camouflaged artifacts to examine them."></svg>
+      <div class="world" id="world"></div>
+      <button class="view-back" id="view-back" type="button" hidden>
+        <span aria-hidden="true">&#8592;</span> Back to room <span class="view-label" id="view-label"></span>
+      </button>
+      <button class="vc-btn vc-left" id="vc-left" type="button" aria-label="Turn left">&#8592;</button>
+      <button class="vc-btn vc-right" id="vc-right" type="button" aria-label="Turn right">&#8594;</button>
+      <div class="vc-zoom">
+        <button class="vc-btn" id="vc-zoom-in" type="button" aria-label="Zoom in">+</button>
+        <button class="vc-btn" id="vc-zoom-out" type="button" aria-label="Zoom out">&minus;</button>
       </div>
-      <button class="scroll-btn scroll-btn-right" id="scroll-right-btn" type="button" aria-label="Look right">&#8594;</button>
+      <div class="world-help" id="world-help">
+        <span class="help-long">Drag to look around &middot; Tap a chest, drawer, cloth, crate, basket, shelf or pillar for a close look &middot; Pinch or use &plus;/&minus; to zoom</span>
+        <span class="help-short">Drag to look &middot; Tap anything for a close look &middot; Pinch to zoom</span>
+      </div>
+      <div class="world-fallback" id="world-fallback" hidden>
+        This gallery needs WebGL (3D graphics), which isn&rsquo;t available in this browser.
+        Try a current version of Chrome, Edge, Firefox or Safari.
+      </div>
       <div class="toast" id="toast" role="status" aria-live="polite"></div>
       <div class="confetti-layer" id="confetti-layer" aria-hidden="true"></div>
-      <div class="scroll-hint" id="scroll-hint">&#8592;&nbsp; Scroll or drag to explore the gallery &nbsp;&#8594;</div>
     </div>
+
+    <div class="checklist" id="checklist" aria-label="Artifacts in this gallery"></div>
   </section>
 
   <!-- =========================== RESULTS =========================== -->
@@ -89,17 +103,34 @@
       <div class="score-grid">
         <div class="score-cell"><div class="v" id="res-score">0</div><div class="k">Score</div></div>
         <div class="score-cell"><div class="v" id="res-found">0/0</div><div class="k">Artifacts found</div></div>
-        <div class="score-cell"><div class="v" id="res-quiz">0/0</div><div class="k">Trivia correct</div></div>
-        <div class="score-cell"><div class="v" id="res-time">0:00</div><div class="k">Time left</div></div>
+        <div class="score-cell"><div class="v" id="res-puzzles">0/0</div><div class="k">Restored</div></div>
+        <div class="score-cell"><div class="v" id="res-quiz">0/0</div><div class="k">Quiz correct</div></div>
       </div>
 
       <div class="result-actions">
-        <button class="btn btn-primary" id="replay-btn" type="button">Explore again</button>
-        <button class="btn" id="menu-btn" type="button">Choose another region</button>
+        <button class="btn btn-primary" id="replay-btn" type="button">Search again</button>
+        <button class="btn" id="menu-btn" type="button">Choose another gallery</button>
       </div>
     </div>
   </section>
 
+</div>
+
+<!-- ========================= RESTORATION PUZZLE ==================== -->
+<div class="overlay" id="puzzle-overlay" role="dialog" aria-modal="true" aria-labelledby="puzzle-title">
+  <div class="modal puzzle-modal">
+    <div class="eyebrow">Restore the artifact &middot; <span id="puzzle-name"></span></div>
+    <h2 id="puzzle-title"></h2>
+    <p class="puzzle-instr" id="puzzle-instr"></p>
+    <div class="puzzle-wrap">
+      <div class="puzzle-stage" id="puzzle-stage"></div>
+      <div class="puzzle-preview" id="puzzle-preview" hidden title="The finished picture"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="note" id="puzzle-status"></span>
+      <button class="btn btn-ghost" id="puzzle-skip" type="button">Skip puzzle (no bonus)</button>
+    </div>
+  </div>
 </div>
 
 <!-- ======================= ARTIFACT CARD MODAL ===================== -->
@@ -112,17 +143,28 @@
       <p class="card-desc" id="card-desc"></p>
       <p class="card-use" id="card-use"></p>
       <div class="card-note" id="card-note" hidden></div>
-
-      <div class="quiz-block" id="quiz-block" hidden>
-        <div class="q" id="quiz-q"></div>
-        <div class="opts" id="quiz-opts"></div>
-        <div class="quiz-note" id="quiz-note"></div>
-      </div>
+      <div class="card-tip">Read closely &mdash; the curator&rsquo;s quiz at the end of this gallery asks about what&rsquo;s on these cards.</div>
 
       <div class="modal-foot">
         <span class="note" id="card-points"></span>
-        <button class="btn btn-primary" id="card-next" type="button">Back to gallery</button>
+        <button class="btn btn-primary" id="card-next" type="button">Add to collection</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== CURATOR'S QUIZ ======================== -->
+<div class="overlay" id="quiz-overlay" role="dialog" aria-modal="true" aria-labelledby="rq-title">
+  <div class="modal quiz-modal">
+    <div class="eyebrow" id="rq-progress"></div>
+    <h2 id="rq-title">Curator&rsquo;s Quiz</h2>
+    <p class="rq-q" id="rq-q"></p>
+    <div class="rq-opts" id="rq-opts"></div>
+    <div class="card-note" id="rq-peek-box" hidden></div>
+    <div class="quiz-note" id="rq-note"></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="rq-peek" type="button">Peek at the card (&minus;10)</button>
+      <button class="btn btn-primary" id="rq-next" type="button" hidden>Next</button>
     </div>
   </div>
 </div>
@@ -130,8 +172,8 @@
 <!-- ============================ NOTEBOOK =========================== -->
 <div class="overlay" id="notebook-overlay" role="dialog" aria-modal="true" aria-labelledby="notebook-title">
   <div class="modal notebook-modal">
-    <h2 id="notebook-title">Field Notebook</h2>
-    <p class="notebook-sub">Every artifact you've identified so far, region by region.</p>
+    <h2 id="notebook-title">Collection</h2>
+    <p class="notebook-sub">Every artifact you&rsquo;ve restored so far, gallery by gallery.</p>
     <div class="notebook-grid" id="notebook-grid-modal"></div>
     <div class="modal-foot">
       <span></span>
@@ -159,10 +201,14 @@
   </div>
 </div>
 
-<script src="js/artifacts.js?v=3"></script>
+<script src="js/vendor/three.min.js?v=159"></script>
+<script src="js/artifacts.js?v=4"></script>
 <script src="js/sound.js?v=2"></script>
-<script src="js/icons.js?v=2"></script>
-<script src="js/scenes.js?v=2"></script>
-<script src="js/game.js?v=7"></script>
+<script src="js/icons.js?v=3"></script>
+<script src="js/scenes.js?v=3"></script>
+<script src="js/puzzles.js?v=7"></script>
+<script src="js/rooms.js?v=3"></script>
+<script src="js/world.js?v=13"></script>
+<script src="js/game.js?v=12"></script>
 </body>
 </html>

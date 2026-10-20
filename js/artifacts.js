@@ -60,7 +60,7 @@ const ARTIFACTS = [
   {
     id: 'noh-mask', region: 'asia', icon: 'nohMask', photo: 'assets/artifacts/noh-mask.jpg',
     name: 'Noh Mask', culture: 'Japanese',
-    desc: 'A carved wooden mask used in classical Noh theatre. Each mask represents a specific character — gods, women, demons, spirits — conveying emotion through subtle expression.',
+    desc: 'A carved wooden mask used in classical Noh theatre. Each mask represents a specific character — gods, women, demons, spirits — conveying emotion through subtle expression. Did you know? By tilting the mask up or down, a performer changes how light falls across the carved face, so the same mask can look joyful or sorrowful.',
     use: 'Worn in Noh theatrical performances and religious ceremonies.',
     points: 100,
     quiz: {
@@ -262,6 +262,140 @@ const ARTIFACTS = [
     },
   },
 ];
+
+/* ------------------------------------------------------------------
+   Researched additions — NOT from the client catalog. Drafted from
+   general knowledge and fact-checked against museum sources (British
+   Museum, National Museum of Denmark, Met, Getty, EISP, NMA, etc.).
+   Every one carries `draft: true` and shows a review note on its card
+   until the client approves the wording. Cultural-sensitivity flags
+   (Nataraja, Benin plaque, Moai) are listed in the README.
+   ------------------------------------------------------------------ */
+const DRAFT_NOTE = 'Draft entry: added from outside research, not from the client catalog. Pending client review.';
+
+ARTIFACTS.push(
+  {
+    id: 'dong-son-drum', region: 'asia', icon: 'dongSonDrum', draft: true,
+    name: 'Dong Son Bronze Drum', culture: 'Dong Son culture · Vietnam',
+    desc: 'A large bronze drum cast by the Dong Son people of the Red River Valley in northern Vietnam, made from about 600 BCE into the first centuries CE. Its flat top is decorated with a central star, often read as the sun, ringed by birds, boats and people.',
+    use: 'Played at ceremonies and festivals, used in rituals for rain and good harvests, and buried with important people as a sign of status.',
+    points: 110,
+    quiz: {
+      q: 'What sits at the very center of a Dong Son drum’s decorated top?',
+      options: ['A star, often read as the sun', 'A dragon', 'A map of the river', 'A portrait of a king'],
+      answer: 0,
+    },
+  },
+  {
+    id: 'chola-nataraja', region: 'asia', icon: 'nataraja', draft: true,
+    name: 'Chola Bronze Nataraja', culture: 'Tamil · Chola dynasty, India',
+    desc: 'A bronze statue of the Hindu god Shiva as Nataraja, the Lord of Dance. The finest were cast in South India under the Chola dynasty (about the 10th–12th centuries CE) using the lost-wax method. Shiva dances inside a ring of fire, standing on a small figure who represents ignorance.',
+    use: 'Worshipped in temples and carried through the streets in temple processions during festivals.',
+    points: 120,
+    quiz: {
+      q: 'What does the small figure beneath Nataraja’s foot represent?',
+      options: ['A defeated king', 'Ignorance', 'The earth', 'A temple servant'],
+      answer: 1,
+    },
+  },
+  {
+    id: 'benin-plaque', region: 'africa', icon: 'beninPlaque', draft: true,
+    name: 'Benin Bronze Plaque', culture: 'Edo people · Kingdom of Benin, Nigeria',
+    desc: 'A cast brass plaque made by the royal guild of bronze casters in the Kingdom of Benin, mostly in the 16th–17th centuries. Hundreds of these plaques once covered the pillars of the royal palace in Benin City, recording rulers, court life and ceremonies. Many were looted by British forces in the 1897 attack on Benin City; some have since been returned.',
+    use: 'Displayed in the Oba’s (king’s) palace as a visual record of the kingdom’s history.',
+    points: 120,
+    quiz: {
+      q: 'Where were Benin bronze plaques originally displayed?',
+      options: ['In a marketplace', 'On trading ships', 'On the pillars of the royal palace', 'In a library'],
+      answer: 2,
+    },
+  },
+  {
+    id: 'kente-cloth', region: 'africa', icon: 'kenteCloth', draft: true,
+    name: 'Kente Cloth', culture: 'Asante & Ewe peoples · Ghana',
+    desc: 'A brightly coloured cloth woven in narrow strips, about a hand’s width each, which are then sewn together edge to edge. Each pattern and colour combination has its own name and meaning. Among the Asante, kente was long reserved for royalty; today it is a symbol of Ghanaian pride.',
+    use: 'Worn at important occasions such as festivals, weddings, graduations and ceremonies.',
+    points: 100,
+    quiz: {
+      q: 'How is kente cloth made?',
+      options: ['Painted on one large sheet', 'Woven in narrow strips that are sewn together', 'Knitted from wool', 'Printed by stamping blocks'],
+      answer: 1,
+    },
+  },
+  {
+    id: 'gundestrup-cauldron', region: 'europe', icon: 'gundestrupCauldron', draft: true,
+    name: 'Gundestrup Cauldron', culture: 'Celtic imagery · found in Denmark',
+    desc: 'A gilded silver bowl made around 2,000 years ago, probably by silversmiths in southeastern Europe, and decorated with images linked to Celtic religion. Peat cutters found it in a bog near Gundestrup, Denmark, in 1891, taken apart with its plates stacked inside. One panel shows an antlered figure holding a ring (torc) and a snake, often linked to the god Cernunnos.',
+    use: 'Probably used in religious rituals, and later placed in the bog as an offering.',
+    points: 120,
+    quiz: {
+      q: 'Where was the Gundestrup Cauldron found?',
+      options: ['In a cave in France', 'In a peat bog in Denmark', 'In a river in Italy', 'Under a castle in Scotland'],
+      answer: 1,
+    },
+  },
+  {
+    id: 'lewis-chessmen', region: 'europe', icon: 'lewisChessman', draft: true,
+    name: 'Lewis Chessmen', culture: 'Norse · found in Scotland',
+    desc: 'A hoard of chess pieces carved mostly from walrus ivory around 1150–1200, probably in Norway, and found on the Isle of Lewis in Scotland in 1831. The pieces have wonderfully expressive faces; some warrior pieces bite the tops of their shields.',
+    use: 'Used to play chess and other board games.',
+    points: 110,
+    quiz: {
+      q: 'What were most of the Lewis Chessmen carved from?',
+      options: ['Marble', 'Bronze', 'Walrus ivory', 'Oak wood'],
+      answer: 2,
+    },
+  },
+  {
+    id: 'moai-statue', region: 'oceania', icon: 'moai', draft: true,
+    name: 'Moai Statue', culture: 'Rapa Nui people · Easter Island',
+    desc: 'One of nearly 900 giant stone figures carved by the Rapa Nui people, roughly between 1250 and 1500 CE (estimates vary), mostly from volcanic rock at the Rano Raraku quarry. Each moai is believed to represent an important ancestor.',
+    use: 'Set up on stone platforms called ahu, most of them facing inland to watch over and protect the community.',
+    points: 120,
+    quiz: {
+      q: 'Which way do most moai face?',
+      options: ['Out to sea', 'Inland, toward the community', 'Toward the volcano only', 'Straight up at the sky'],
+      answer: 1,
+    },
+  },
+  {
+    id: 'boomerang', region: 'oceania', icon: 'boomerang', draft: true,
+    name: 'Boomerang', culture: 'Aboriginal Australians',
+    desc: 'A curved throwing stick made by many Aboriginal groups for thousands of years; the oldest found in Australia is about 10,000 years old. Most boomerangs were designed to fly straight and hit a target, not to come back. Returning boomerangs are a lighter, special type.',
+    use: 'Used for hunting, fighting, digging and making fire, and tapped together as clapsticks to keep rhythm in music and ceremonies.',
+    points: 100,
+    quiz: {
+      q: 'Did most traditional boomerangs come back when thrown?',
+      options: ['Yes, every one of them', 'No, most were made to fly straight at a target', 'Only when thrown at night', 'Only the very heavy ones'],
+      answer: 1,
+    },
+  },
+  {
+    id: 'sun-stone', region: 'namerica', icon: 'sunStone', draft: true,
+    name: 'Aztec Sun Stone', culture: 'Mexica (Aztec) · Mexico',
+    desc: 'A huge carved basalt disc, about 3.6 metres across and weighing around 24 tonnes, made by the Mexica in the early 1500s and rediscovered in Mexico City’s main square in 1790. Its central face is usually identified as the sun god Tonatiuh, ringed by the symbols of the 20 days of the Mexica calendar.',
+    use: 'Probably a ceremonial or sacrificial monument expressing the Mexica view of time and the cosmos, rather than a working calendar.',
+    points: 120,
+    quiz: {
+      q: 'How many day signs ring the Sun Stone?',
+      options: ['7', '12', '20', '365'],
+      answer: 2,
+    },
+  },
+  {
+    id: 'dine-blanket', region: 'namerica', icon: 'dineBlanket', draft: true,
+    name: 'Diné (Navajo) Woven Blanket', culture: 'Diné (Navajo) · Southwestern United States',
+    desc: 'A wool textile woven on an upright loom by Diné weavers, famous for bold stripes and geometric designs. In Diné tradition, the people learned weaving from Spider Woman. “Chief blankets” of the 1800s were prized and traded far across the region.',
+    use: 'Worn as blankets and garments; from the 1880s onward, also woven as rugs for trade.',
+    points: 110,
+    quiz: {
+      q: 'In Diné tradition, who taught the people to weave?',
+      options: ['Coyote', 'The Sun', 'Spider Woman', 'A travelling trader'],
+      answer: 2,
+    },
+  },
+);
+ARTIFACTS.forEach(a => { if (a.draft && !a.note) a.note = DRAFT_NOTE; });
 
 const ARTIFACTS_BY_REGION = REGIONS.reduce((map, r) => {
   map[r.key] = ARTIFACTS.filter(a => a.region === r.key);
