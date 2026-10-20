@@ -837,3 +837,34 @@ body.playing .checklist { flex: none; }
   .card-art { height: 210px; }
   .world-help { max-width: calc(100% - 140px); }
 }
+
+/* ---------- card + tutorial modals: never clip the text or the button ----
+   The modal is a column that fits the screen: the picture shrinks first,
+   the text scrolls if it still doesn't fit, and the footer (Add to
+   collection / Next) stays pinned at the bottom. */
+.card-modal, .tutorial-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+}
+.card-art, .tutorial-art {
+  flex: 0 1 auto;
+  min-height: 90px;
+  height: clamp(110px, 27vh, 300px);
+}
+.card-body, .tutorial-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.card-body .modal-foot, .tutorial-body .modal-foot {
+  position: sticky;
+  bottom: 0;
+  background: var(--panel);
+  margin-top: 14px;
+  padding-top: 12px;
+  box-shadow: 0 -10px 12px -8px var(--panel);
+}
